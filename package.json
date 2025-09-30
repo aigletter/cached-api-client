@@ -1,0 +1,38 @@
+{
+  "name": "cached-api-client",
+  "version": "1.0.0",
+  "description": "Cached API client with TTL support for Pinia stores",
+  "author": {
+    "name": "Yurii Orlyk",
+    "email": "aigletter@gmail.com"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "pinia-expirable-store": "git+ssh://git@github.com:aigletter/pinia-expirable-store.git"
+  },
+  "peerDependencies": {
+    "axios": "^1.11.0",
+    "pinia": "^3.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "@types/node": "^24.3.1"
+  }
+}
