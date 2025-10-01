@@ -61,14 +61,17 @@ useApi().url('orders.items.delete', {
 }).delete();
 ```
 
-Cached requests:
-
-available storages: 'session', 'local', 'memory'
+Cached requests:  
+available storages: 'session', 'local', 'memory'  
+default: 'memory'
 
 ```ts
 import {useApi} from "./Api";
 
-const orders = useApi().cache('session').url('orders.index');
+const orders = useApi()
+    .cache(3600, 'session')
+    .url('orders.index')
+    .get();
 ```
 
 ## Roadmap
