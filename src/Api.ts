@@ -119,7 +119,7 @@ class Api {
     public async get(url?: string): Promise<AxiosResponse> {
         url = this.checkAndGetUrl(url);
 
-        return await this.fetch(url);
+        return this.fetch(url);
     }
 
     /*public async post(path: string, params: Record<string, string|number> = {}, body?: Record<string, any>, headers?: Record<string, string>) {
@@ -136,7 +136,7 @@ class Api {
         if (body) {
             this.body(body);
         }
-        return await this.send(url);
+        return this.send(url);
     }
 
     public async put(url?: string, body?: Record<string, any>, headers?: Record<string, string>) {
@@ -145,14 +145,14 @@ class Api {
         if (body) {
             this.body(body);
         }
-        return await this.send(url);
+        return this.send(url);
     }
 
     public async delete(url?: string) {
         url = this.checkAndGetUrl(url);
         this.method('PUT');
 
-        return await this.send(url);
+        return this.send(url);
     }
 
     public async auth(email: string, password: string, remember?: boolean) {
@@ -206,7 +206,7 @@ class Api {
                 });
             }
 
-            return await this.send(url);
+            return this.send(url);
         });
         if (!response) {
             throw new Error('Empty response');
