@@ -1,8 +1,8 @@
 import axios, {type AxiosError, AxiosRequestConfig, type AxiosResponse} from "axios";
 import {ExpirableStore} from "pinia-expirable-store";
-import {ApiConfig} from "./ApiConfig";
+import {ApiConfig, TokenStore} from "./ApiConfig";
 import useSingleflight from "./Singleflight";
-import {StoreType, useApiStoreLocal, useApiStoreMemory, useApiStoreSession} from "./Stores";
+import {StoreType, TokenStoreAdapter, useApiStoreLocal, useApiStoreMemory, useApiStoreSession} from "./Stores";
 import {Token} from "./Token";
 
 interface Cache {
@@ -142,15 +142,17 @@ class Api {
         return this.send(url);
     }
 
-    private getTokenStore(): ExpirableStore {
+    private getTokenStore(): TokenStore {
         if (!this.config.auth?.stateless?.tokenStore) {
-            return useApiStoreMemory();
+            return new TokenStoreAdapter(useApiStoreMemory());
         }
         let store = this.config.auth?.stateless.tokenStore;
         if (typeof store === 'string') {
-            store = this.getStore(store);
+            const defaultStore = this.getStore(store);
+            return new TokenStoreAdapter(defaultStore);
         }
-        return store;
+
+        return this.config.auth?.stateless.tokenStore as TokenStore;
     }
 
     private handleAuthResponse(response: AxiosResponse) {
@@ -164,9 +166,9 @@ class Api {
                 throw new Error('Token store is not initialized')
             }
             const token = this.formatToken(response.data);
-            const ttl = this.calculateTokenTtl(token.expires);
+            //const ttl = this.calculateTokenTtl(token.expires);
             const tokenStore = this.getTokenStore();
-            tokenStore.set('token', token, ttl);
+            tokenStore.set(token);
         }
     }
 
@@ -378,7 +380,7 @@ class Api {
     private addAuthRequestHeaders() {
         if (this.config.auth?.stateless) {
             const store = this.getTokenStore();
-            const token = store.get<Token>(TOKEN_STORE_KEY);
+            const token = store.get();
             if (token) {
                 this.header('Authorization', 'Bearer ' + token.token)
             }

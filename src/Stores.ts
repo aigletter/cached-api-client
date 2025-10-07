@@ -1,5 +1,7 @@
 import {ExpirableStore} from "pinia-expirable-store";
 import defineExpirableStore from "pinia-expirable-store";
+import {TokenStore} from "./ApiConfig";
+import {Token} from "./Token";
 
 export enum StoreType {
     local = 'local',
@@ -32,4 +34,22 @@ export function useApiStoreSession(): ExpirableStore {
             storage: sessionStorage
         }
     })() as unknown as ExpirableStore;
+}
+
+export class TokenStoreAdapter implements TokenStore {
+    private tokenStoreKey = 'token';
+
+    public constructor(private store: ExpirableStore) {
+    }
+
+    public get(): Token | null {
+        const token = this.store.get<Token>(this.tokenStoreKey);
+        return token || null;
+    }
+    set(token: Token): void {
+        this.store.set(this.tokenStoreKey, token);
+    }
+    forget(): void {
+        this.store.remove(this.tokenStoreKey);
+    }
 }
