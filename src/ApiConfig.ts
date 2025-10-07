@@ -2,7 +2,7 @@ import {ExpirableStore} from "pinia-expirable-store";
 import {Token} from "./Token";
 import {StoreType} from "./Stores";
 
-export interface Auth {
+export interface AuthConfig {
     method: string,
     route: string,
     notAuthRedirect: () => void,
@@ -21,5 +21,5 @@ export interface ApiConfig {
     version?: string;
     routes: Record<string, string>;
 
-    auth?: Auth
+    auth?: AuthConfig
 }
