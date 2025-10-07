@@ -17,27 +17,14 @@ class Api {
 
     private _method: string = 'GET';
 
-    private _body: Record<string, any> = {};
+    private _body: Record<string, unknown> = {};
 
-    private _headers: Record<string, any> = {};
+    private _headers: Record<string, string> = {};
 
     private _cache?: Cache;
 
-    private tokenStore?: ExpirableStore;
-
-    private _ttl?: number;
-
     constructor(private readonly config: ApiConfig) {
-        if (config.auth) {
-            let store = config.auth.tokenStore;
-            if (!config.auth.tokenStore) {
-                store = useApiStoreSession();
-            }
-            if (typeof store === 'string') {
-                store = this.getStore(store);
-            }
-            this.tokenStore = store;
-        }
+
     }
 
     private getStore(storage: string|StoreType): ExpirableStore {
@@ -150,23 +137,59 @@ class Api {
 
     public async delete(url?: string) {
         url = this.checkAndGetUrl(url);
-        this.method('PUT');
+        this.method('DELETE');
 
         return this.send(url);
     }
 
+    private getTokenStore(): ExpirableStore {
+        if (!this.config.auth?.stateless?.tokenStore) {
+            return useApiStoreMemory();
+        }
+        let store = this.config.auth?.stateless.tokenStore;
+        if (typeof store === 'string') {
+            store = this.getStore(store);
+        }
+        return store;
+    }
+
+    private handleAuthResponse(response: AxiosResponse) {
+        // TODO
+        if (!this.config.auth) {
+            throw new Error('');
+        }
+
+        if (this.config.auth.stateless) {
+            if (!this.config.auth.stateless.tokenStore) {
+                throw new Error('Token store is not initialized')
+            }
+            const token = this.formatToken(response.data);
+            const ttl = this.calculateTokenTtl(token.expires);
+            const tokenStore = this.getTokenStore();
+            tokenStore.set('token', token, ttl);
+        }
+    }
+
+    private async beforeAuth() {
+        if (this.config.auth?.stateful?.csrfRoute) {
+            const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
+            await this.request(url, 'GET', {}, {});
+        }
+    }
+
     public async auth(email: string, password: string, remember?: boolean) {
+        // TODO
         if (!this.isAuthenticatable()) {
             throw new Error('');
         }
+
+        await this.beforeAuth();
+
         const request = {email: email, password: password, remember: remember} as Record<string, any>;
         const response = await this.post(this.getLoginUrl(), request);
-        if (!this.tokenStore) {
-            throw new Error('Token store is not initialized')
-        }
-        const token = this.formatToken(response.data);
-        const ttl = this.calculateTokenTtl(token.expires);
-        this.tokenStore.set('token', token, ttl);
+
+        this.handleAuthResponse(response);
+
         return response;
     }
 
@@ -191,10 +214,10 @@ class Api {
 
     private formatToken(response: unknown): Token
     {
-        if (!this.config.auth?.formatToken) {
+        if (!this.config.auth?.stateless?.formatToken) {
             throw new Error('unknown token response format');
         }
-        return this.config.auth.formatToken(response);
+        return this.config.auth?.stateless.formatToken(response);
     }
 
     public async fetch (url: string): Promise<AxiosResponse> {
@@ -269,7 +292,7 @@ class Api {
         this._cache.store.set(key, {
             status: response.status,
             statusText: response.statusText,
-            headers: { ...response._headers },
+            headers: { ...response.headers },
             data: response.data,
         }, this._cache.ttl);
     }
@@ -344,12 +367,23 @@ class Api {
         return !!this.config.auth;
     }
 
-    private async request(url: string, method: string, body: Record<string, any>, headers: Record<string, any>) {
-        if (this.isAuthenticatable()) {
-            const token = this.tokenStore?.get<Token>(TOKEN_STORE_KEY);
+    private addAuthRequestHeaders() {
+        if (this.config.auth?.stateless) {
+            const store = this.getTokenStore();
+            const token = store.get<Token>(TOKEN_STORE_KEY);
             if (token) {
                 this.header('Authorization', 'Bearer ' + token.token)
             }
+        }
+    }
+
+    private isWithCredentials(): boolean {
+        return !!this.config.auth?.stateful;
+    }
+
+    private async request(url: string, method: string, body: Record<string, any>, headers: Record<string, any>) {
+        if (this.isAuthenticatable()) {
+            this.addAuthRequestHeaders();
         }
 
         try {
@@ -358,6 +392,7 @@ class Api {
                 method: method,
                 data: body,
                 headers: headers,
+                withCredentials: this.isWithCredentials()
             });
 
             if (this.isResponseUnauthorized(response)) {

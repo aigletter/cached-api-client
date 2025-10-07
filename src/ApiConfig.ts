@@ -5,14 +5,21 @@ import {StoreType} from "./Stores";
 export interface Auth {
     method: string,
     route: string,
-    notAuthRedirect: Function,
-    tokenStore: StoreType|ExpirableStore,
-    formatToken: (raw: unknown) => Token;
+    notAuthRedirect: () => void,
+
+    stateless?: {
+        tokenStore: StoreType|ExpirableStore|string,
+        formatToken: (raw: unknown) => Token;
+    } | undefined,
+    stateful?: {
+        csrfRoute?: string,
+    }
 }
 
 export interface ApiConfig {
     base: string;
     version?: string;
     routes: Record<string, string>;
+
     auth?: Auth
 }
