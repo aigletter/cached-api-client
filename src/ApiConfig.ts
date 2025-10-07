@@ -1,6 +1,7 @@
 import {ExpirableStore} from "pinia-expirable-store";
 import {Token} from "./Token";
 import {StoreType} from "./Stores";
+import {AxiosRequestConfig} from "axios";
 
 export interface AuthConfig {
     method: string,
@@ -13,7 +14,6 @@ export interface AuthConfig {
     } | undefined,
     stateful?: {
         csrfRoute?: string,
-        beforeAuth?: (request: Record<string, unknown>, headers: Record<string, string>) => void,
     }
 }
 
@@ -21,6 +21,6 @@ export interface ApiConfig {
     base: string;
     version?: string;
     routes: Record<string, string>;
-
+    beforeRequest?: (request: AxiosRequestConfig) => void,
     auth?: AuthConfig
 }

@@ -1,4 +1,4 @@
-import axios, {type AxiosError, type AxiosResponse} from "axios";
+import axios, {type AxiosError, AxiosRequestConfig, type AxiosResponse} from "axios";
 import {ExpirableStore} from "pinia-expirable-store";
 import {ApiConfig} from "./ApiConfig";
 import useSingleflight from "./Singleflight";
@@ -170,13 +170,10 @@ class Api {
         }
     }
 
-    private async beforeAuth(request: Record<string, unknown>, headers: Record<string, string>) {
+    private async beforeAuth() {
         if (this.config.auth?.stateful?.csrfRoute) {
             const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
             await this.request(url, 'GET', {}, {});
-        }
-        if (this.config.auth?.stateful?.beforeAuth) {
-            this.config.auth?.stateful?.beforeAuth(request, headers);
         }
     }
 
@@ -187,11 +184,10 @@ class Api {
         }
 
         const request = {email: email, password: password, remember: remember} as Record<string, any>;
-        const headers = {}
 
-        await this.beforeAuth(request, headers);
+        await this.beforeAuth();
 
-        const response = await this.post(this.getLoginUrl(), request);
+        const response = await this.request(this.getLoginUrl(), this.getLoginMethod(), request, {});
 
         this.handleAuthResponse(response);
 
@@ -361,6 +357,13 @@ class Api {
         return this.buildUrl(this.config.auth.route);
     }
 
+    private getLoginMethod(): string {
+        if (this.config.auth?.method) {
+            return this.config.auth?.method;
+        }
+        return 'POST';
+    }
+
     private isCacheable(): boolean {
         if (this._method !== 'GET') {
             return false;
@@ -391,14 +394,23 @@ class Api {
             this.addAuthRequestHeaders();
         }
 
+        const requestConfig: AxiosRequestConfig = {
+            url: url,
+            method: method,
+            data: body,
+            headers: headers,
+        }
+
+        if (this.isWithCredentials()) {
+            requestConfig.withCredentials = true;
+        }
+
+        if (this.config.beforeRequest) {
+            this.config.beforeRequest(requestConfig);
+        }
+
         try {
-            const response = await axios({
-                url: url,
-                method: method,
-                data: body,
-                headers: headers,
-                withCredentials: this.isWithCredentials()
-            });
+            const response = await axios(requestConfig);
 
             if (this.isResponseUnauthorized(response)) {
                 this.handleUnauthorized();
