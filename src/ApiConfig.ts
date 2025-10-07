@@ -13,6 +13,7 @@ export interface AuthConfig {
     } | undefined,
     stateful?: {
         csrfRoute?: string,
+        beforeAuth: (request: Record<string, unknown>, headers: Record<string, string>) => void,
     }
 }
 

@@ -170,10 +170,13 @@ class Api {
         }
     }
 
-    private async beforeAuth() {
+    private async beforeAuth(request: Record<string, unknown>, headers: Record<string, string>) {
         if (this.config.auth?.stateful?.csrfRoute) {
             const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
             await this.request(url, 'GET', {}, {});
+        }
+        if (this.config.auth?.stateful?.beforeAuth) {
+            this.config.auth?.stateful?.beforeAuth(request, headers);
         }
     }
 
@@ -183,9 +186,11 @@ class Api {
             throw new Error('');
         }
 
-        await this.beforeAuth();
-
         const request = {email: email, password: password, remember: remember} as Record<string, any>;
+        const headers = {}
+
+        await this.beforeAuth(request, headers);
+
         const response = await this.post(this.getLoginUrl(), request);
 
         this.handleAuthResponse(response);
