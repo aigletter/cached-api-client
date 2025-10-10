@@ -21,6 +21,8 @@ class Api {
 
     private _headers: Record<string, string> = {};
 
+    private _options: Record<string, unknown> = {};
+
     private _cache?: Cache;
 
     constructor(private readonly config: ApiConfig) {
@@ -37,6 +39,10 @@ class Api {
             default:
                 return  useApiStoreMemory() as unknown as ExpirableStore;
         }
+    }
+
+    public options(options: Record<string, unknown>) {
+        this._options = options;
     }
 
     public cache (ttl?: number, storage: 'memory' | 'session' | 'local' = 'memory') {
@@ -241,7 +247,7 @@ class Api {
     }
 
     public async send (url: string): Promise<AxiosResponse> {
-        const response = await this.request(url, this._method, this._body, this._headers);
+        const response = await this.request(url, this._method, this._body, this._headers, this._options);
         this.reset();
         return response;
     }
@@ -250,6 +256,7 @@ class Api {
         this._method = 'GET';
         this._body = {};
         this._headers = {};
+        this._options = {};
         this._url = '';
         this._cache = undefined;
     }
@@ -391,17 +398,23 @@ class Api {
         return !!this.config.auth?.stateful;
     }
 
-    private async request(url: string, method: string, body: Record<string, any>, headers: Record<string, any>) {
+    private async request(
+        url: string,
+        method: string,
+        body: Record<string, any>,
+        headers: Record<string, any>,
+        options: Record<string, unknown> = {}
+    ) {
         if (this.isAuthenticatable()) {
             this.addAuthRequestHeaders();
         }
 
-        const requestConfig: AxiosRequestConfig = {
+        const requestConfig: AxiosRequestConfig = Object.assign({
             url: url,
             method: method,
             data: body,
             headers: headers,
-        }
+        }, options);
 
         if (this.isWithCredentials()) {
             requestConfig.withCredentials = true;
