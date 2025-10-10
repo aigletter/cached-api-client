@@ -41,8 +41,9 @@ class Api {
         }
     }
 
-    public options(options: Record<string, unknown>) {
+    public options(options: Record<string, unknown>): Api {
         this._options = options;
+        return this;
     }
 
     public cache (ttl?: number, storage: 'memory' | 'session' | 'local' = 'memory') {
