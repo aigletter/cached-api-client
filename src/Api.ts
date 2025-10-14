@@ -247,7 +247,11 @@ class Api {
         return response;
     }
 
-    public async send (url: string): Promise<AxiosResponse> {
+    public async send (url?: string): Promise<AxiosResponse> {
+        url = url || this._url;
+        if (!url) {
+            throw new Error('Url is required');
+        }
         const response = await this.request(url, this._method, this._body, this._headers, this._options);
         this.reset();
         return response;
