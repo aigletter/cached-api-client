@@ -32,6 +32,9 @@ export interface Api {
     send (url?: string): Promise<AxiosResponse>;
 
     buildUrl(path: string, params?: Record<string, any>): string;
+
+
+    auth(email: string, password: string, remember?: boolean): Promise<AxiosResponse>;
 }
 
 interface Cache {
@@ -219,36 +222,12 @@ class ApiService implements Api {
         }
     }*/
 
-    private getTokenStore(): TokenStore {
-        if (!this.config.auth?.stateless?.tokenStore) {
-            return new TokenStoreAdapter(useApiStoreMemory());
-        }
-        let store = this.config.auth?.stateless.tokenStore;
-        if (typeof store === 'string') {
-            const defaultStore = StoreType.getStore(store);
-            return new TokenStoreAdapter(defaultStore);
-        }
-
-        return this.config.auth?.stateless.tokenStore as TokenStore;
-    }
-
     private checkAndGetUrl(url?: string): string {
         url = url || this._url;
         if (!url) {
             throw new Error('Url is required');
         }
         return url;
-    }
-
-    private calculateTokenTtl(expires?: Date): number|null {
-        if (!expires) {
-            return null;
-        }
-
-        const now = new Date();
-        const diff = expires.getTime() - now.getTime();
-
-        return diff > 0 ? diff : 0;
     }
 
     private reset () {
@@ -339,20 +318,6 @@ class ApiService implements Api {
             return false;
         }
         return !!this._cache;
-    }
-
-    private isAuthenticatable(): boolean {
-        return !!this.auth;
-    }
-
-    private addAuthRequestHeaders() {
-        if (this.config.auth?.stateless) {
-            const store = this.getTokenStore();
-            const token = store.get();
-            if (token) {
-                this.header('Authorization', 'Bearer ' + token.token)
-            }
-        }
     }
 
     private isWithCredentials(): boolean {

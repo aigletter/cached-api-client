@@ -105,6 +105,17 @@ class AuthService implements Auth {
         }
         return this.config.stateless.formatToken(response);
     }
+
+    private calculateTokenTtl(expires?: Date): number|null {
+        if (!expires) {
+            return null;
+        }
+
+        const now = new Date();
+        const diff = expires.getTime() - now.getTime();
+
+        return diff > 0 ? diff : 0;
+    }
 }
 
 export function makeAuth(config: AuthConfig): Auth {
