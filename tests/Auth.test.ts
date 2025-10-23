@@ -54,7 +54,7 @@ describe('AuthService', () => {
 
         const request: AxiosRequestConfig = { headers: {} };
 
-        authService.beforeRequest(request);
+        authService.authorizeRequest(request);
 
         expect(request.headers?.['Authorization']).toBe(`Bearer ${MOCK_TOKEN.token}`);
     });

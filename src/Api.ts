@@ -195,23 +195,13 @@ class ApiService implements Api {
      * @param email
      * @param password
      * @param remember
-     * @deprecated
      */
     public async auth(email: string, password: string, remember?: boolean): Promise<AxiosResponse> {
-        // TODO
-        if (!this.isAuthenticatable()) {
-            throw new Error('');
+        if (!this.authService) {
+            throw new Error('Auth service is not provided');
         }
 
-        const request = {email: email, password: password, remember: remember} as Record<string, any>;
-
-        await this.beforeAuth(request);
-
-        const response = await this.request(this.getLoginUrl(), this.getLoginMethod(), request, {});
-
-        this.handleAuthResponse(response);
-
-        return response;
+        return await this.authService.auth(email, password, remember);
     }
 
 
@@ -352,7 +342,7 @@ class ApiService implements Api {
     }
 
     private isAuthenticatable(): boolean {
-        return !!this.config.auth;
+        return !!this.auth;
     }
 
     private addAuthRequestHeaders() {
@@ -376,16 +366,16 @@ class ApiService implements Api {
         headers: Record<string, any>,
         options: Record<string, unknown> = {}
     ) {
-        if (this.isAuthenticatable()) {
-            this.addAuthRequestHeaders();
-        }
-
         const requestConfig: AxiosRequestConfig = Object.assign({
             url: url,
             method: method,
             data: body,
             headers: headers,
         }, options);
+
+        if (this.authService) {
+            this.authService.authorizeRequest(requestConfig);
+        }
 
         if (this.isWithCredentials()) {
             requestConfig.withCredentials = true;
@@ -415,76 +405,6 @@ class ApiService implements Api {
 
             throw error;
         }
-    }
-
-
-    /*%%%%%%% DEPRECATED %%%%%%%*/
-
-    /**
-     * @private
-     * @deprecated
-     */
-    private getLoginUrl(): string {
-        if (!this.config.auth) {
-            throw new Error('Auth is not configured');
-        }
-        return this.buildUrl(this.config.auth.route);
-    }
-
-    /**
-     * @private
-     * @deprecated
-     */
-    private getLoginMethod(): string {
-        if (this.config.auth?.method) {
-            return this.config.auth?.method;
-        }
-        return 'POST';
-    }
-
-    /**
-     * @param response
-     * @private
-     * @deprecated
-     */
-    private handleAuthResponse(response: AxiosResponse) {
-        // TODO
-        if (!this.config.auth) {
-            throw new Error('');
-        }
-
-        if (this.config.auth.stateless) {
-            if (!this.config.auth.stateless.tokenStore) {
-                throw new Error('Token store is not initialized')
-            }
-            const token = this.formatToken(response.data);
-            //const ttl = this.calculateTokenTtl(token.expires);
-            const tokenStore = this.getTokenStore();
-            tokenStore.set(token);
-        }
-    }
-
-    /**
-     * @private
-     * @deprecated
-     */
-    private async beforeAuth(request: AxiosRequestConfig) {
-        if (this.config.auth?.stateful?.csrfRoute) {
-            const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
-            await this.request(url, 'GET', {}, {});
-        }
-    }
-
-    /**
-     * @param response
-     * @private
-     * @deprecated
-     */
-    private formatToken(response: unknown): Token {
-        if (!this.config.auth?.stateless?.formatToken) {
-            throw new Error('unknown token response format');
-        }
-        return this.config.auth?.stateless.formatToken(response);
     }
 }
 

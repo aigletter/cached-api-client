@@ -5,7 +5,7 @@ import {useApi} from "./Api";
 import {Token} from "./Token";
 
 export interface Auth {
-    beforeRequest(request: AxiosRequestConfig): void;
+    authorizeRequest(request: AxiosRequestConfig): void;
 
     handleUnauthorized(): void;
 
@@ -17,8 +17,10 @@ class AuthService implements Auth {
 
     }
 
-    public beforeRequest(request: AxiosRequestConfig): void {
-        this.addAuthRequestHeaders(request);
+    public authorizeRequest(request: AxiosRequestConfig): void {
+        if (this.config.stateless) {
+            this.addAuthRequestHeaders(request);
+        }
     }
 
     public handleUnauthorized(): void {
@@ -54,13 +56,10 @@ class AuthService implements Auth {
     }
 
     private addAuthRequestHeaders(request: AxiosRequestConfig) {
-        if (this.config.stateless) {
-            const store = this.getTokenStore();
-            const token = store.get();
-            if (token) {
-                this.addHeaderToRequest(request, 'Authorization', 'Bearer ' + token.token);
-                //this.header('Authorization', 'Bearer ' + token.token)
-            }
+        const store = this.getTokenStore();
+        const token = store.get();
+        if (token) {
+            this.addHeaderToRequest(request, 'Authorization', 'Bearer ' + token.token);
         }
     }
 
