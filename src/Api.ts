@@ -1,18 +1,45 @@
 import axios, {type AxiosError, AxiosRequestConfig, type AxiosResponse} from "axios";
 import {ExpirableStore} from "pinia-expirable-store";
-import {ApiConfig, TokenStore} from "./ApiConfig";
+import {ApiConfig, TokenStore} from "./Config";
 import useSingleflight from "./Singleflight";
 import {StoreType, TokenStoreAdapter, useApiStoreLocal, useApiStoreMemory, useApiStoreSession} from "./Stores";
 import {Token} from "./Token";
+import {Auth, makeAuth} from "./Auth";
+
+export interface Api {
+    options(options: Record<string, unknown>): Api;
+
+    cache (ttl?: number, storage?: 'memory' | 'session' | 'local'): Api;
+
+    method (method: string): Api;
+
+    header (key: string, value: string): Api;
+
+    headers (headers: Record<string, string>): Api;
+
+    body (body: Record<string, any>): Api;
+
+    url(name: string, params: Record<string, any>): Api;
+
+    get(url?: string): Promise<AxiosResponse>;
+
+    post(url?: string, body?: Record<string, any>, headers?: Record<string, string>): Promise<AxiosResponse>;
+
+    put(url?: string, body?: Record<string, any>, headers?: Record<string, string>): Promise<AxiosResponse>;
+
+    delete(url?: string): Promise<AxiosResponse>;
+
+    send (url?: string): Promise<AxiosResponse>;
+
+    buildUrl(path: string, params?: Record<string, any>): string;
+}
 
 interface Cache {
     store: ExpirableStore,
     ttl?: number
 }
 
-const TOKEN_STORE_KEY = 'token';
-
-class Api {
+class ApiService implements Api {
     private _url: string = '';
 
     private _method: string = 'GET';
@@ -25,21 +52,12 @@ class Api {
 
     private _cache?: Cache;
 
-    constructor(private readonly config: ApiConfig) {
+    constructor(private readonly config: ApiConfig, private readonly authService?: Auth) {
 
     }
 
-    private getStore(storage: string|StoreType): ExpirableStore {
-        const storeType = typeof storage === 'string' ? StoreType.fromValue(storage) : storage;
-        switch (storeType) {
-            case StoreType.session:
-                return  useApiStoreSession() as unknown as ExpirableStore;
-            case StoreType.local:
-                return  useApiStoreLocal() as unknown as ExpirableStore;
-            default:
-                return  useApiStoreMemory() as unknown as ExpirableStore;
-        }
-    }
+
+    /*%%%%%%% public %%%%%%%*/
 
     public options(options: Record<string, unknown>): Api {
         this._options = options;
@@ -48,7 +66,7 @@ class Api {
 
     public cache (ttl?: number, storage: 'memory' | 'session' | 'local' = 'memory') {
         this._cache = {
-            store: this.getStore(storage),
+            store: StoreType.getStore(storage),
             ttl: ttl
         }
 
@@ -106,25 +124,13 @@ class Api {
         return this;
     }
 
-    /*public async get(path: string, params: Record<string, string|number> = {}): Promise<AxiosResponse> {
-        path = this.buildUrl(path, params);
-        return await this.fetch(path);
-    }*/
     public async get(url?: string): Promise<AxiosResponse> {
         url = this.checkAndGetUrl(url);
 
         return this.fetch(url);
     }
 
-    /*public async post(path: string, params: Record<string, string|number> = {}, body?: Record<string, any>, headers?: Record<string, string>) {
-        path = this.buildUrl(path, params);
-        this.method('POST');
-        if (body) {
-            this.body(body);
-        }
-        return await this.fetch(path);
-    }*/
-    public async post(url?: string, body?: Record<string, any>, headers?: Record<string, string>) {
+    public async post(url?: string, body?: Record<string, any>, headers?: Record<string, string>): Promise<AxiosResponse> {
         url = this.checkAndGetUrl(url);
         this.method('POST');
         if (body) {
@@ -133,7 +139,7 @@ class Api {
         return this.send(url);
     }
 
-    public async put(url?: string, body?: Record<string, any>, headers?: Record<string, string>) {
+    public async put(url?: string, body?: Record<string, any>, headers?: Record<string, string>): Promise<AxiosResponse> {
         url = this.checkAndGetUrl(url);
         this.method('PUT');
         if (body) {
@@ -142,92 +148,11 @@ class Api {
         return this.send(url);
     }
 
-    public async delete(url?: string) {
+    public async delete(url?: string): Promise<AxiosResponse> {
         url = this.checkAndGetUrl(url);
         this.method('DELETE');
 
         return this.send(url);
-    }
-
-    private getTokenStore(): TokenStore {
-        if (!this.config.auth?.stateless?.tokenStore) {
-            return new TokenStoreAdapter(useApiStoreMemory());
-        }
-        let store = this.config.auth?.stateless.tokenStore;
-        if (typeof store === 'string') {
-            const defaultStore = this.getStore(store);
-            return new TokenStoreAdapter(defaultStore);
-        }
-
-        return this.config.auth?.stateless.tokenStore as TokenStore;
-    }
-
-    private handleAuthResponse(response: AxiosResponse) {
-        // TODO
-        if (!this.config.auth) {
-            throw new Error('');
-        }
-
-        if (this.config.auth.stateless) {
-            if (!this.config.auth.stateless.tokenStore) {
-                throw new Error('Token store is not initialized')
-            }
-            const token = this.formatToken(response.data);
-            //const ttl = this.calculateTokenTtl(token.expires);
-            const tokenStore = this.getTokenStore();
-            tokenStore.set(token);
-        }
-    }
-
-    private async beforeAuth() {
-        if (this.config.auth?.stateful?.csrfRoute) {
-            const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
-            await this.request(url, 'GET', {}, {});
-        }
-    }
-
-    public async auth(email: string, password: string, remember?: boolean) {
-        // TODO
-        if (!this.isAuthenticatable()) {
-            throw new Error('');
-        }
-
-        const request = {email: email, password: password, remember: remember} as Record<string, any>;
-
-        await this.beforeAuth();
-
-        const response = await this.request(this.getLoginUrl(), this.getLoginMethod(), request, {});
-
-        this.handleAuthResponse(response);
-
-        return response;
-    }
-
-    private checkAndGetUrl(url?: string): string {
-        url = url || this._url;
-        if (!url) {
-            throw new Error('Url is required');
-        }
-        return url;
-    }
-
-    private calculateTokenTtl(expires?: Date): number|null {
-        if (!expires) {
-            return null;
-        }
-
-        const now = new Date();
-        const diff = expires.getTime() - now.getTime();
-
-        return diff > 0 ? diff : 0;
-    }
-
-    private formatToken(response: unknown): Token
-    {
-        if (!this.config.auth?.stateless?.formatToken) {
-            throw new Error('unknown token response format');
-        }
-        return this.config.auth?.stateless.formatToken(response);
     }
 
     public async fetch (url: string): Promise<AxiosResponse> {
@@ -257,6 +182,85 @@ class Api {
         return response;
     }
 
+    public buildUrl(path: string, params: Record<string, any> = {}): string {
+        const current = this._url;
+        this.url(path, params);
+        const url = this._url;
+        this._url = current;
+
+        return url;
+    }
+
+    /**
+     * @param email
+     * @param password
+     * @param remember
+     * @deprecated
+     */
+    public async auth(email: string, password: string, remember?: boolean): Promise<AxiosResponse> {
+        // TODO
+        if (!this.isAuthenticatable()) {
+            throw new Error('');
+        }
+
+        const request = {email: email, password: password, remember: remember} as Record<string, any>;
+
+        await this.beforeAuth(request);
+
+        const response = await this.request(this.getLoginUrl(), this.getLoginMethod(), request, {});
+
+        this.handleAuthResponse(response);
+
+        return response;
+    }
+
+
+    /*%%%%%%% PRIVATE %%%%%%%*/
+
+    /*private getStore(storage: string|StoreType): ExpirableStore {
+        const storeType = typeof storage === 'string' ? StoreType.fromValue(storage) : storage;
+        switch (storeType) {
+            case StoreType.session:
+                return  useApiStoreSession() as unknown as ExpirableStore;
+            case StoreType.local:
+                return  useApiStoreLocal() as unknown as ExpirableStore;
+            default:
+                return  useApiStoreMemory() as unknown as ExpirableStore;
+        }
+    }*/
+
+    private getTokenStore(): TokenStore {
+        if (!this.config.auth?.stateless?.tokenStore) {
+            return new TokenStoreAdapter(useApiStoreMemory());
+        }
+        let store = this.config.auth?.stateless.tokenStore;
+        if (typeof store === 'string') {
+            const defaultStore = StoreType.getStore(store);
+            return new TokenStoreAdapter(defaultStore);
+        }
+
+        return this.config.auth?.stateless.tokenStore as TokenStore;
+    }
+
+    private checkAndGetUrl(url?: string): string {
+        url = url || this._url;
+        if (!url) {
+            throw new Error('Url is required');
+        }
+        return url;
+    }
+
+    private calculateTokenTtl(expires?: Date): number|null {
+        if (!expires) {
+            return null;
+        }
+
+        const now = new Date();
+        const diff = expires.getTime() - now.getTime();
+
+        return diff > 0 ? diff : 0;
+    }
+
     private reset () {
         this._method = 'GET';
         this._body = {};
@@ -283,11 +287,6 @@ class Api {
         }
         return error?.response?.status === 401;
     }
-
-    /*private sendForMethod (method: string, url: string, params: Record<string, any> = {}) {
-        this.method(method);
-        return this.send(url);
-    }*/
 
     private getFromCache (key: string): AxiosResponse|null {
         if (this.inCache(key)) {
@@ -320,34 +319,15 @@ class Api {
         return `${url}?${query}`;
     }
 
-    private handleUnauthorized(): void
-    {
-        if (this.config.auth && this.config.auth.notAuthRedirect) {
-            //router.push({name: this.config.loginRoute})
-            this.config.auth.notAuthRedirect();
+    private handleUnauthorized(): void {
+        if (!this.authService) {
+            throw new Error('Auth service is not implement');
         }
+        this.authService.handleUnauthorized();
+        /*if (this.config.auth && this.config.auth.notAuthRedirect) {
+            this.config.auth.notAuthRedirect();
+        }*/
     }
-
-    public buildUrl(path: string, params = {}): string {
-        const current = this._url;
-        this.url(path, params);
-        const url = this._url;
-        this._url = current;
-
-        return url;
-    }
-
-    /*private handleMethod(callback: any) {
-        return callback().catch((error: AxiosError) => {
-            if (error.response && error.response.status === 401) {
-                // Clear storage token
-                router.push('/login');
-                return error.response;
-            } else {
-                throw error;
-            }
-        });
-    }*/
 
     private hasRoute(key: string): boolean {
         return this.config.routes.hasOwnProperty(key);
@@ -362,20 +342,6 @@ class Api {
             return this.config.base;
         }
         return this.config.base + '/' + this.config.version;
-    }
-
-    private getLoginUrl(): string {
-        if (!this.config.auth) {
-            throw new Error('Auth is not configured');
-        }
-        return this.buildUrl(this.config.auth.route);
-    }
-
-    private getLoginMethod(): string {
-        if (this.config.auth?.method) {
-            return this.config.auth?.method;
-        }
-        return 'POST';
     }
 
     private isCacheable(): boolean {
@@ -450,6 +416,76 @@ class Api {
             throw error;
         }
     }
+
+
+    /*%%%%%%% DEPRECATED %%%%%%%*/
+
+    /**
+     * @private
+     * @deprecated
+     */
+    private getLoginUrl(): string {
+        if (!this.config.auth) {
+            throw new Error('Auth is not configured');
+        }
+        return this.buildUrl(this.config.auth.route);
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    private getLoginMethod(): string {
+        if (this.config.auth?.method) {
+            return this.config.auth?.method;
+        }
+        return 'POST';
+    }
+
+    /**
+     * @param response
+     * @private
+     * @deprecated
+     */
+    private handleAuthResponse(response: AxiosResponse) {
+        // TODO
+        if (!this.config.auth) {
+            throw new Error('');
+        }
+
+        if (this.config.auth.stateless) {
+            if (!this.config.auth.stateless.tokenStore) {
+                throw new Error('Token store is not initialized')
+            }
+            const token = this.formatToken(response.data);
+            //const ttl = this.calculateTokenTtl(token.expires);
+            const tokenStore = this.getTokenStore();
+            tokenStore.set(token);
+        }
+    }
+
+    /**
+     * @private
+     * @deprecated
+     */
+    private async beforeAuth(request: AxiosRequestConfig) {
+        if (this.config.auth?.stateful?.csrfRoute) {
+            const url = this.buildUrl(this.config.auth?.stateful?.csrfRoute);
+            await this.request(url, 'GET', {}, {});
+        }
+    }
+
+    /**
+     * @param response
+     * @private
+     * @deprecated
+     */
+    private formatToken(response: unknown): Token {
+        if (!this.config.auth?.stateless?.formatToken) {
+            throw new Error('unknown token response format');
+        }
+        return this.config.auth?.stateless.formatToken(response);
+    }
 }
 
 let apiConfig: ApiConfig;
@@ -459,12 +495,17 @@ export function provideApiConfig(config: ApiConfig) {
     apiConfig = config;
 }
 
-export function useApi() {
-    if (!instance) {
+export function useApi(): Api {
+    /*if (!instance) {
         if (!apiConfig) {
             throw new Error('ApiConfig is not provided');
         }
-        instance = new Api(apiConfig);
+        instance = new ApiImpl(apiConfig);
     }
-    return instance;
+    return instance;*/
+    let authService: Auth | undefined = undefined;
+    if (apiConfig.auth) {
+        authService = makeAuth(apiConfig.auth);
+    }
+    return new ApiService(apiConfig, authService);
 }

@@ -1,4 +1,3 @@
-import {ExpirableStore} from "pinia-expirable-store";
 import {Token} from "./Token";
 import {StoreType} from "./Stores";
 import {AxiosRequestConfig} from "axios";

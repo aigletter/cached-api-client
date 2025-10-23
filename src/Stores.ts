@@ -1,6 +1,6 @@
 import {ExpirableStore} from "pinia-expirable-store";
 import defineExpirableStore from "pinia-expirable-store";
-import {TokenStore} from "./ApiConfig";
+import {TokenStore} from "./Config";
 import {Token} from "./Token";
 
 export enum StoreType {
@@ -15,6 +15,17 @@ export namespace StoreType {
             return value as StoreType;
         }
         throw new Error('Unknown store type');
+    }
+    export function getStore(storage: string|StoreType): ExpirableStore {
+        const storeType = typeof storage === 'string' ? StoreType.fromValue(storage) : storage;
+        switch (storeType) {
+            case StoreType.session:
+                return  useApiStoreSession() as unknown as ExpirableStore;
+            case StoreType.local:
+                return  useApiStoreLocal() as unknown as ExpirableStore;
+            default:
+                return  useApiStoreMemory() as unknown as ExpirableStore;
+        }
     }
 }
 

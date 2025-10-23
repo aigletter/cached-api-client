@@ -13,7 +13,9 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
   },
   "files": [
     "dist"
@@ -32,7 +34,9 @@
     "pinia": "^3.0.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.2",
-    "@types/node": "^24.3.1"
+    "@types/node": "^24.9.1",
+    "@vitest/coverage-v8": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
   }
 }
