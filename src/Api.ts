@@ -19,7 +19,7 @@ export interface Api {
 
     body (body: Record<string, any>): Api;
 
-    url(name: string, params: Record<string, any>): Api;
+    url(name: string, params?: Record<string, any>): Api;
 
     get(url?: string): Promise<AxiosResponse>;
 
