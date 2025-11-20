@@ -11,7 +11,7 @@ export interface AuthConfig {
     route: string;
     notAuthRedirect: () => void;
     stateless?: {
-        tokenStore: StoreType | TokenStore | string;
+        tokenStore: StoreType | TokenStore | string | (() => TokenStore);
         formatToken: (raw: unknown) => Token;
     } | undefined;
     stateful?: {
