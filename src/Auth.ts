@@ -50,6 +50,8 @@ class AuthService implements Auth {
         if (typeof store === 'string') {
             const defaultStore = StoreType.getStore(store);
             return new TokenStoreAdapter(defaultStore);
+        } else if (typeof store === 'function') {
+            return store();
         }
 
         return this.config.stateless.tokenStore as TokenStore;
