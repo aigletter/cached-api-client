@@ -1,48 +1,28 @@
-import {AuthConfig, TokenStore} from "./Config";
-import {AxiosRequestConfig, type AxiosResponse} from "axios";
-import {StoreType, TokenStoreAdapter, useApiStoreMemory} from "./Stores";
-import {Api, useApi} from "./Api";
-import {Token} from "./Token";
-
-export interface Auth {
-    authorizeRequest(request: AxiosRequestConfig): void;
-
-    handleUnauthorized(): void;
-
-    auth(api: Api, email: string, password: string, remember?: boolean): Promise<AxiosResponse>
-}
-
-class AuthService implements Auth {
-    public constructor(private readonly config: AuthConfig) {
-
+import { StoreType, TokenStoreAdapter, useApiStoreMemory } from "./Stores";
+import { useApi } from "./Api";
+class AuthService {
+    constructor(config) {
+        this.config = config;
     }
-
-    public authorizeRequest(request: AxiosRequestConfig): void {
+    authorizeRequest(request) {
         if (this.config.stateless) {
             this.addAuthRequestHeaders(request);
         }
     }
-
-    public handleUnauthorized(): void {
+    handleUnauthorized() {
         this.config.notAuthRedirect();
     }
-
-    public async auth(api: Api, email: string, password: string, remember?: boolean): Promise<AxiosResponse> {
-        const body = {email: email, password: password, remember: remember} as Record<string, any>;
-
+    async auth(api, email, password, remember) {
+        const body = { email: email, password: password, remember: remember };
         await this.beforeAuth();
-
         const response = await api
             .method(this.getAuthMethod())
             .body(body)
             .send(this.getAuthUrl());
-
         this.handleAuthResponse(response);
-
         return response;
     }
-
-    private getTokenStore(): TokenStore {
+    getTokenStore() {
         if (!this.config.stateless?.tokenStore) {
             return new TokenStoreAdapter(useApiStoreMemory());
         }
@@ -50,76 +30,64 @@ class AuthService implements Auth {
         if (typeof store === 'string') {
             const defaultStore = StoreType.getStore(store);
             return new TokenStoreAdapter(defaultStore);
-        } else if (typeof store === 'function') {
+        }
+        else if (typeof store === 'function') {
             return store();
         }
-
-        return this.config.stateless.tokenStore as TokenStore;
+        return this.config.stateless.tokenStore;
     }
-
-    private addAuthRequestHeaders(request: AxiosRequestConfig) {
+    addAuthRequestHeaders(request) {
         const store = this.getTokenStore();
         const token = store.get();
         if (token) {
             this.addHeaderToRequest(request, 'Authorization', 'Bearer ' + token.token);
         }
     }
-
-    private addHeaderToRequest(request: AxiosRequestConfig, name: string, value: string): void {
-        const headers = request.headers || {} as Record<string, any>;
+    addHeaderToRequest(request, name, value) {
+        const headers = request.headers || {};
         headers[name] = value;
         request.headers = headers;
     }
-
-    private async beforeAuth() {
+    async beforeAuth() {
         if (this.config.stateful?.csrfRoute) {
             const url = useApi().buildUrl(this.config.stateful?.csrfRoute);
             await useApi().get(url);
         }
     }
-
-    private getAuthMethod(): string {
+    getAuthMethod() {
         if (this.config.method) {
             return this.config.method;
         }
         return 'POST';
     }
-
-    private getAuthUrl(): string {
+    getAuthUrl() {
         return useApi().buildUrl(this.config.route);
     }
-
-    private handleAuthResponse(response: AxiosResponse) {
+    handleAuthResponse(response) {
         if (this.config.stateless) {
             if (!this.config.stateless.tokenStore) {
-                throw new Error('Token store is not initialized')
+                throw new Error('Token store is not initialized');
             }
             const token = this.formatToken(response.data);
             const tokenStore = this.getTokenStore();
             tokenStore.set(token);
         }
     }
-
-    private formatToken(response: unknown): Token
-    {
+    formatToken(response) {
         if (!this.config.stateless?.formatToken) {
             throw new Error('unknown token response format');
         }
         return this.config.stateless.formatToken(response);
     }
-
-    private calculateTokenTtl(expires?: Date): number|null {
+    calculateTokenTtl(expires) {
         if (!expires) {
             return null;
         }
-
         const now = new Date();
         const diff = expires.getTime() - now.getTime();
-
         return diff > 0 ? diff : 0;
     }
 }
-
-export function makeAuth(config: AuthConfig): Auth {
+export function makeAuth(config) {
     return new AuthService(config);
 }
