@@ -1,7 +1,7 @@
 import {AuthConfig, TokenStore} from "./Config";
 import {AxiosRequestConfig, type AxiosResponse} from "axios";
 import {StoreType, TokenStoreAdapter, useApiStoreMemory} from "./Stores";
-import {useApi} from "./Api";
+import {Api, useApi} from "./Api";
 import {Token} from "./Token";
 
 export interface Auth {
@@ -9,7 +9,7 @@ export interface Auth {
 
     handleUnauthorized(): void;
 
-    auth(email: string, password: string, remember?: boolean): Promise<AxiosResponse>
+    auth(api: Api, email: string, password: string, remember?: boolean): Promise<AxiosResponse>
 }
 
 class AuthService implements Auth {
@@ -27,12 +27,12 @@ class AuthService implements Auth {
         this.config.notAuthRedirect();
     }
 
-    public async auth(email: string, password: string, remember?: boolean): Promise<AxiosResponse> {
+    public async auth(api: Api, email: string, password: string, remember?: boolean): Promise<AxiosResponse> {
         const body = {email: email, password: password, remember: remember} as Record<string, any>;
 
         await this.beforeAuth();
 
-        const response = await useApi()
+        const response = await api
             .method(this.getAuthMethod())
             .body(body)
             .send(this.getAuthUrl());

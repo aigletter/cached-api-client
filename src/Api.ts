@@ -204,7 +204,7 @@ class ApiService implements Api {
             throw new Error('Auth service is not provided');
         }
 
-        return await this.authService.auth(email, password, remember);
+        return await this.authService.auth(this, email, password, remember);
     }
 
 

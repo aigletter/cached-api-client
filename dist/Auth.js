@@ -12,10 +12,10 @@ class AuthService {
     handleUnauthorized() {
         this.config.notAuthRedirect();
     }
-    async auth(email, password, remember) {
+    async auth(api, email, password, remember) {
         const body = { email: email, password: password, remember: remember };
         await this.beforeAuth();
-        const response = await useApi()
+        const response = await api
             .method(this.getAuthMethod())
             .body(body)
             .send(this.getAuthUrl());
